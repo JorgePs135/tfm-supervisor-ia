@@ -1,13 +1,21 @@
 import os
 import pandas as pd
+import subprocess
 from pydriller import Repository
 from google import genai
 
 # Configuración y validación de seguridad
 API_KEY = os.getenv("GEMINI_API_KEY")
 if not API_KEY:
-    print("❌ Error crítico: No se encontró la variable GEMINI_API_KEY.")
+    print("Error crítico: No se encontró la variable GEMINI_API_KEY.")
     exit(1)
+
+# === ESTE BLOQUE SOLUCIONA EL ERROR DE DOCKER/GIT ===
+try:
+    print("Configurando permisos de seguridad de Git...")
+    subprocess.run(["git", "config", "--global", "--add", "safe.directory", "*"], check=True)
+except Exception as e:
+    print(f"Aviso al configurar Git: {e}")
 
 client = genai.Client(api_key=API_KEY)
 MODELO = "gemini-2.0-flash"
@@ -65,7 +73,7 @@ def clasificar_contribucion_ia(commits):
                 "justificacion": partes[1].strip() if len(partes) > 1 else "Revisión manual requerida."
             })
         except Exception as e:
-            print(f"❌ Error con IA en commit {c['hash']}: {e}")
+            print(f"Error con IA en commit {c['hash']}: {e}")
             
     return resultados
 
@@ -82,7 +90,7 @@ def generar_dashboard_markdown(resultados):
         
     with open("INFORME_SUPERVISOR.md", "w", encoding="utf-8") as f:
         f.write(contenido)
-    print("✅ Archivo 'INFORME_SUPERVISOR.md' creado con éxito.")
+    print("Archivo 'INFORME_SUPERVISOR.md' creado con éxito.")
 
 if __name__ == "__main__":
     datos_crudos = extraer_commits_recientes(limite=5)
@@ -90,4 +98,4 @@ if __name__ == "__main__":
         datos_evaluados = clasificar_contribucion_ia(datos_crudos)
         generar_dashboard_markdown(datos_evaluados)
     else:
-        print("❌ No se encontraron commits para analizar.")
+        print("No se encontraron commits para analizar.")
