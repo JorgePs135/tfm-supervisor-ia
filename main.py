@@ -40,7 +40,7 @@ def extraer_commits_recientes(ruta=".", limite=5):
     return commits
 
 def clasificar_contribucion_ia(commits):
-    print(f"[2/3] 🧠 Consultando a Gemini para clasificar {len(commits)} contribuciones...")
+    print(f"[2/3] Consultando a Gemini para clasificar {len(commits)} contribuciones...")
     resultados = []
     
     for c in commits:
@@ -58,28 +58,41 @@ def clasificar_contribucion_ia(commits):
         
         Formato de respuesta estricto: Categoría | Justificación
         """
+        
+        # Valores por defecto en caso de que la IA falle
+        categoria = " Error IA"
+        justificacion = "No se pudo obtener el análisis."
+        
         try:
             respuesta = client.models.generate_content(model=MODELO, contents=prompt)
-            texto = respuesta.text.strip()
+            texto = respuesta.text.strip() if respuesta.text else ""
             
-            # Separamos la respuesta de la IA (Categoría | Justificación)
-            partes = texto.split("|") if "|" in texto else ["Sin Clasificar", texto]
-            
-            resultados.append({
-                "hash": c['hash'],
-                "autor": c['autor'],
-                "churn": c['churn_total'],
-                "categoria": partes[0].strip(),
-                "justificacion": partes[1].strip() if len(partes) > 1 else "Revisión manual requerida."
-            })
+            if texto:
+                partes = texto.split("|") if "|" in texto else ["Sin Clasificar", texto]
+                categoria = partes[0].strip()
+                justificacion = partes[1].strip() if len(partes) > 1 else "Análisis completado sin formato estricto."
+            else:
+                justificacion = "La IA devolvió una respuesta vacía."
+                
         except Exception as e:
+            # Si hay un error (ej. API key inválida o cuota), capturamos el texto del error
             print(f"Error con IA en commit {c['hash']}: {e}")
+            justificacion = f"Fallo en la API de Gemini. Detalle: {str(e)[:60]}"
+            
+        # IMPORTANTE: Guardamos el commit en la tabla SÍ O SÍ, falle o no la IA
+        resultados.append({
+            "hash": c['hash'],
+            "autor": c['autor'],
+            "churn": c['churn_total'],
+            "categoria": categoria,
+            "justificacion": justificacion
+        })
             
     return resultados
 
 def generar_dashboard_markdown(resultados):
-    print("[3/3] 📊 Generando informe para el Engineering Manager...")
-    contenido = "# 📊 Cuadro de Mando: Auditoría de Código IA\n\n"
+    print("[3/3] Generando informe para el Engineering Manager...")
+    contenido = "# Cuadro de Mando: Auditoría de Código IA\n\n"
     contenido += "> *Análisis generado automáticamente por el Supervisor IA (TFM).* \n\n"
     
     contenido += "| Hash | Desarrollador | Volumen (Líneas) | Categoría | Justificación (IA) |\n"
