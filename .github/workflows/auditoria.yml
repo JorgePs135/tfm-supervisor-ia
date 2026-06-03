@@ -1,0 +1,23 @@
+name: Evaluador Inteligente de TFM
+
+on: [push]
+
+jobs:
+  auditar-equipo:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del codigo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 
+          
+      - name: Analizar Contribuciones con IA
+        uses: ./ 
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          
+      - name: Subir informe al repositorio
+        uses: actions/upload-artifact@v4
+        with:
+          name: informe-supervisor
+          path: INFORME_SUPERVISOR.md

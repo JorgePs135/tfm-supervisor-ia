@@ -1,0 +1,9 @@
+name: 'Supervisor IA de Contribuciones'
+description: 'Clasifica el valor de los commits usando métricas y Gemini 2.0 Flash'
+author: 'Jorge'
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+branding:
+  icon: 'bar-chart'
+  color: 'purple'
