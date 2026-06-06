@@ -64,23 +64,33 @@ def clasificar_contribucion_ia(commits):
         categoria = " Error IA"
         justificacion = "No se pudo obtener el análisis."
         
-        try:
-            respuesta = client.models.generate_content(model=MODELO, contents=prompt)
-            texto = respuesta.text.strip() if respuesta.text else ""
-            
-            if texto:
-                partes = texto.split("|") if "|" in texto else ["Sin Clasificar", texto]
-                categoria = partes[0].strip()
-                justificacion = partes[1].strip() if len(partes) > 1 else "Análisis completado sin formato estricto."
-            else:
-                justificacion = "La IA devolvió una respuesta vacía."
+        max_intentos = 3
+        for intento in range(max_intentos):
+            try:
+                # Pausa de 15 segundos ANTES de cada petición para respetar estrictamente los límites
+                time.sleep(15) 
                 
-        except Exception as e:
-            # Si hay un error (ej. API key inválida o cuota), capturamos el texto del error
-            print(f"Error con IA en commit {c['hash']}: {e}")
-            justificacion = f"Fallo en la API de Gemini. Detalle: {str(e)[:60]}"
-            
-        # IMPORTANTE: Guardamos el commit en la tabla SÍ O SÍ, falle o no la IA
+                respuesta = client.models.generate_content(model=MODELO, contents=prompt)
+                texto = respuesta.text.strip() if respuesta.text else ""
+                
+                if texto:
+                    partes = texto.split("|") if "|" in texto else ["Sin Clasificar", texto]
+                    categoria = partes[0].strip()
+                    justificacion = partes[1].strip() if len(partes) > 1 else "Análisis completado sin formato estricto."
+                
+                break # ¡Éxito! Rompemos el bucle de reintentos y pasamos al siguiente commit
+                
+            except Exception as e:
+                error_msg = str(e)
+                if "429" in error_msg:
+                    print(f"Alerta 429. Intento {intento+1}/{max_intentos} fallido. Esperando recuperación de la API...")
+                    time.sleep(10) # Espera un extra de 10s si Google se queja
+                    justificacion = f"Límite de API (429) persistente tras {max_intentos} intentos."
+                else:
+                    justificacion = f"Error desconocido: {error_msg[:60]}"
+                    break # Si es un error diferente (ej. clave mal puesta), no seguimos reintentando
+        # -------------------------------------------------
+        
         resultados.append({
             "hash": c['hash'],
             "autor": c['autor'],
@@ -88,9 +98,7 @@ def clasificar_contribucion_ia(commits):
             "categoria": categoria,
             "justificacion": justificacion
         })
-        print("⏳ Pausa de 5 segundos para respetar los límites de la API gratuita...")
-        time.sleep(5)    
-    
+            
     return resultados
 
 def generar_dashboard_markdown(resultados):
