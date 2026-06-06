@@ -1,4 +1,5 @@
 import os
+import time
 import pandas as pd
 import subprocess
 from pydriller import Repository
@@ -87,7 +88,9 @@ def clasificar_contribucion_ia(commits):
             "categoria": categoria,
             "justificacion": justificacion
         })
-            
+        print("⏳ Pausa de 5 segundos para respetar los límites de la API gratuita...")
+        time.sleep(5)    
+    
     return resultados
 
 def generar_dashboard_markdown(resultados):
