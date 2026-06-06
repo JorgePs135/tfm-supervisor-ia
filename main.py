@@ -19,10 +19,10 @@ except Exception as e:
     print(f"Aviso al configurar Git: {e}")
 
 client = genai.Client(api_key=API_KEY)
-MODELO = "gemini-2.0-flash"
+MODELO = "gemini-1.5-flash"
 
 def extraer_commits_recientes(ruta=".", limite=5):
-    print(f"[1/3] 🔍 Extrayendo los últimos {limite} commits...")
+    print(f"[1/3]  Extrayendo los últimos {limite} commits...")
     commits = []
     try:
         for i, commit in enumerate(Repository(ruta).traverse_commits()):
@@ -117,7 +117,7 @@ def generar_dashboard_markdown(resultados):
     print("Archivo 'INFORME_SUPERVISOR.md' creado con éxito.")
 
 if __name__ == "__main__":
-    datos_crudos = extraer_commits_recientes(limite=5)
+    datos_crudos = extraer_commits_recientes(limite=1)
     if datos_crudos:
         datos_evaluados = clasificar_contribucion_ia(datos_crudos)
         generar_dashboard_markdown(datos_evaluados)
