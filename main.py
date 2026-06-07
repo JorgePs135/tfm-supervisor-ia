@@ -19,7 +19,7 @@ except Exception as e:
     print(f"Aviso al configurar Git: {e}")
 
 client = genai.Client(api_key=API_KEY)
-MODELO = "gemini-1.5-flash"
+MODELO = "gemini-2.0-flash"
 
 def extraer_commits_recientes(ruta=".", limite=5):
     print(f"[1/3]  Extrayendo los últimos {limite} commits...")
