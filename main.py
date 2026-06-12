@@ -58,6 +58,7 @@ def extraer_commits_recientes(ruta=".", limite=3):
 def clasificar_contribucion_ia(commits):
     print(f"[2/3] Consultando a Gemini para auditar {len(commits)} contribuciones semánticas...")
     resultados = []
+    
     for c in commits:
         prompt = f"""
         Actúa como un Engineering Manager. Analiza este commit de {c['autor']}:
@@ -65,22 +66,33 @@ def clasificar_contribucion_ia(commits):
         - Archivos: {len(c['archivos_modificados'])} | Líneas: +{c['lineas_agregadas']} -{c['lineas_borradas']}
         Responde en este formato estricto: Categoría [Evolutivo, Mantenimiento, Riesgo Alto] | Frase de justificación.
         """
-        categoria, justificacion = "Error IA", "No se pudo obtener el análisis."
+        
+        categoria = "Error IA"
+        justificacion = "No se pudo obtener el análisis."
+        
         for intento in range(3):
             try:
-                time.sleep(15)
+                time.sleep(15)  # Respetar la cuota de la API gratuita
                 respuesta = client.models.generate_content(model=MODELO, contents=prompt)
                 texto = respuesta.text.strip() if respuesta.text else ""
+                
                 if texto:
                     partes = texto.split("|") if "|" in texto else ["Sin Clasificar", texto]
                     categoria = partes[0].strip()
                     justificacion = partes[1].strip() if len(partes) > 1 else "Análisis completado."
                 break
+                
             except Exception as e:
+                # ¡ESTA LÍNEA ES CLAVE! Nos dirá el motivo real en el log de GitHub
+                print(f"Error real de Gemini en commit {c['hash']}: {str(e)}")
+                
                 if "429" in str(e):
+                    print("Límite de ratio detectado, esperando 20 segundos adicionales...")
                     time.sleep(20)
                 else:
-                    break
+                    justificacion = f"Error de API: {str(e)[:60]}"
+                    break  # Si el error es una clave mala (403) o modelo erróneo, salimos del bucle
+                    
         resultados.append({
             "hash": c['hash'], "autor": c['autor'], "churn": c['churn_total'],
             "archivos_count": len(c['archivos_modificados']), "categoria": categoria, "justificacion": justificacion
