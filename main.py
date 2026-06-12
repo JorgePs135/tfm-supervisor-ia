@@ -77,29 +77,39 @@ def clasificar_contribuciones_batch(commits):
     
     resultados = []
     texto_respuesta = ""
+    error_api = ""
     
     try:
         respuesta = client.models.generate_content(model=MODELO, contents=prompt)
         texto_respuesta = respuesta.text.strip() if respuesta.text else ""
-        
-        # IMPRIMIMOS LA RESPUESTA EN LA CONSOLA PARA VER QUÉ DICE REALMENTE GEMINI
         print("\n=== 📝 RESPUESTA EN BRUTO DE GEMINI ===")
         print(texto_respuesta)
         print("=======================================\n")
         
     except Exception as e:
-        print(f"❌ Error crítico en la llamada de API de Gemini: {e}")
-        texto_respuesta = ""
+        # Capturamos el error real de Google para enviarlo a la tabla
+        error_api = str(e)
+        print(f"❌ Error crítico de Gemini: {error_api}")
 
-    # Procesamiento elástico de líneas
     for c in commits:
         categoria = "Error IA"
-        justificacion = "No se pudo clasificar (Revisa el log de la consola)."
         
-        if not texto_respuesta:
-            justificacion = "La API de Gemini no devolvió texto. Comprueba las cuotas o restricciones de la API Key."
+        # 1. Si hubo un error técnico con la API (Cuota, Clave falsa, etc.)
+        if error_api:
+            if "429" in error_api:
+                justificacion = "Error 429: Cuota agotada. Recuerda crear la clave en un PROYECTO NUEVO de Google."
+            elif "403" in error_api or "API_KEY_INVALID" in error_api:
+                justificacion = "Error 403: Clave inválida. Revisa el Secret de GitHub (cuidado con los espacios en blanco)."
+            else:
+                justificacion = f"Fallo de conexión: {error_api[:50]}..."
+                
+        # 2. Si la llamada funcionó pero Google la censuró (Filtros de seguridad)
+        elif not texto_respuesta:
+            justificacion = "Bloqueo: La API devolvió un texto vacío (posible filtro de seguridad de Google)."
+            
+        # 3. Si todo fue bien, extraemos los datos elásticamente
         else:
-            # Buscamos de forma elástica si el hash está contenido en alguna línea
+            justificacion = "No se pudo extraer del texto."
             for linea in texto_respuesta.split("\n"):
                 if c['hash'].lower() in linea.lower() and "|" in linea:
                     partes = linea.split("|")
@@ -108,14 +118,15 @@ def clasificar_contribuciones_batch(commits):
                     if len(partes) >= 3:
                         justificacion = partes[2].strip()
                     else:
-                        justificacion = "Análisis semántico completado."
-                    break # Encontrado, pasamos al siguiente commit
+                        justificacion = "Análisis completado."
+                    break
                     
         resultados.append({
             "hash": c['hash'], "autor": c['autor'], "churn": c['churn_total'],
             "archivos_count": len(c['archivos_modificados']), 
             "categoria": categoria, "justificacion": justificacion
         })
+        
     return resultados
 
 def generar_dashboard_markdown(resultados):
