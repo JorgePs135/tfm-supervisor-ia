@@ -4,13 +4,13 @@ import subprocess
 from pydriller import Repository
 from google import genai
 
-# Configuración y validación de seguridad de la API
+# Validación de seguridad de la API
 API_KEY = os.getenv("GEMINI_API_KEY")
 if not API_KEY:
     print("Error crítico: No se encontró la variable GEMINI_API_KEY.")
     exit(1)
 
-# === BLOQUE DE SEGURIDAD PARA ENTORNO DOCKER/GITHUB ACTIONS ===
+# Bloque de seguridad obligatorio para entornos Docker en GitHub Actions
 try:
     print("Configurando permisos de seguridad de Git...")
     subprocess.run(["git", "config", "--global", "--add", "safe.directory", "*"], check=True)
@@ -19,14 +19,12 @@ except Exception as e:
 
 # Inicialización del cliente oficial de Google GenAI
 client = genai.Client(api_key=API_KEY)
-MODELO = "gemini-2.0-flash"  # Modelo definitivo testeado y funcional
+MODELO = "gemini-2.0-flash"
 
-def extraer_commits_recientes(ruta=".", limite=5):
-    print(f"[1/3] Extrayendo los últimos {limite} commits del repositorio...")
+def extraer_commits_recientes(ruta=".", limite=3):
+    print(f"[1/3] Extrayendo los últimos {limite} commits del repositorio en {ruta}...")
     commits = []
     try:
-        # traverse_commits() devuelve los commits del más antiguo al más reciente.
-        # Al convertirlo en lista y revertirlo, analizamos los verdaderamente "últimos" commits.
         todos_los_commits = list(Repository(ruta).traverse_commits())
         commits_recientes = reversed(todos_los_commits[-limite:])
         
@@ -41,7 +39,7 @@ def extraer_commits_recientes(ruta=".", limite=5):
                 "churn_total": commit.insertions + commit.deletions
             })
     except Exception as e:
-        print(f"Aviso en la fase de extracción de Git: {e}")
+        print(f"Error crítico en la fase de extracción de Git: {e}")
     return commits
 
 def clasificar_contribucion_ia(commits):
@@ -64,15 +62,13 @@ def clasificar_contribucion_ia(commits):
         Formato de respuesta estricto (no añadas introducciones ni saludos): Categoría | Justificación
         """
         
-        # Valores por defecto en caso de fallo técnico
         categoria = "Error IA"
         justificacion = "No se pudo obtener el análisis semántico."
-        
         max_intentos = 3
+        
         for intento in range(max_intentos):
             try:
-                # Pausa estratégica para mitigar el límite de cuota (429) de la API gratuita
-                time.sleep(15) 
+                time.sleep(15)  # Control preventivo de tasa de transferencia (Rate limit)
                 
                 respuesta = client.models.generate_content(model=MODELO, contents=prompt)
                 texto = respuesta.text.strip() if respuesta.text else ""
@@ -81,17 +77,17 @@ def clasificar_contribucion_ia(commits):
                     partes = texto.split("|") if "|" in texto else ["Sin Clasificar", texto]
                     categoria = partes[0].strip()
                     justificacion = partes[1].strip() if len(partes) > 1 else "Análisis completado sin formato estricto."
-                break  # Éxito, rompemos el bucle de reintentos
+                break
                 
             except Exception as e:
                 error_msg = str(e)
                 if "429" in error_msg:
-                    print(f"Alerta 429 (Cuota). Intento {intento+1}/{max_intentos} fallido. Esperando recuperación...")
-                    time.sleep(20)  # Espera extra si los servidores de Google rechazan la petición
-                    justificacion = f"Límite de API (429) persistente tras {max_intentos} reintentos."
+                    print(f"Alerta 429 (Cuota). Reintento {intento+1}/{max_intentos}. Esperando...")
+                    time.sleep(20)
+                    justificacion = f"Límite de API (429) de Google alcanzado."
                 else:
                     justificacion = f"Error del sistema: {error_msg[:60]}"
-                    break  # Si el error no es por cuota (ej. API Key inválida), no reintentamos
+                    break
         
         resultados.append({
             "hash": c['hash'],
@@ -107,7 +103,6 @@ def clasificar_contribucion_ia(commits):
 def generar_dashboard_markdown(resultados):
     print("[3/3] Construyendo el cuadro de mando gerencial...")
     
-    # Diseño de la interfaz Markdown optimizado para la pantalla de GitHub
     contenido = "# 📊 Cuadro de Mando: Supervisor IA de Código\n\n"
     contenido += "> 🤖 *Informe estratégico generado automáticamente mediante el análisis de metadatos de Git (PyDriller) y comprensión semántica profunda de modelos de lenguaje (Gemini LLM).* \n\n"
     
@@ -115,7 +110,6 @@ def generar_dashboard_markdown(resultados):
     contenido += "| :--- | :--- | :---: | :---: | :--- | :--- |\n"
     
     for r in resultados:
-        # Añadimos un toque visual según la categoría para el mánager
         cat_badge = r['categoria']
         if "Riesgo Alto" in r['categoria']:
             cat_badge = f"🔴 **{r['categoria']}**"
@@ -129,27 +123,26 @@ def generar_dashboard_markdown(resultados):
     contenido += "\n\n---"
     contenido += "\n*Nota para el Engineering Manager: Los commits marcados en **Riesgo Alto** reflejan grandes volúmenes de cambio estructural o inconsistencias semánticas que requieren una revisión de código prioritaria.*"
 
-    # === DETECCIÓN NATIVA DE GITHUB ACTIONS ===
-    # GitHub inyecta una variable de entorno con la ruta a un archivo temporal donde se guarda el resumen
+    # Canal 1: Inyección dinámica nativa en la pantalla de GitHub Actions
     github_summary_path = os.getenv("GITHUB_STEP_SUMMARY")
-    
     if github_summary_path:
-        # Si existe, estamos en la nube de GitHub. Escribimos directamente en su panel
         with open(github_summary_path, "a", encoding="utf-8") as f:
             f.write(contenido)
-        print("🚀 ¡Éxito! El cuadro de mando se ha inyectado directamente en el Step Summary de GitHub Actions.")
-    else:
-        # Si ejecutas en local (tu máquina), guarda el archivo clásico para que puedas revisarlo
-        archivo_local = "INFORME_SUPERVISOR.md"
-        with open(archivo_local, "w", encoding="utf-8") as f:
-            f.write(contenido)
-        print(f"📁 Ejecución local detectada. Archivo '{archivo_local}' creado con éxito.")
+        print("Cuadro de mando inyectado con éxito en el Step Summary de GitHub.")
+        
+    # Canal 2: Generación persistente para descarga de artefactos
+    archivo_local = "INFORME_SUPERVISOR.md"
+    with open(archivo_local, "w", encoding="utf-8") as f:
+        f.write(contenido)
+    print(f"Archivo físico '{archivo_local}' guardado correctamente.")
 
 if __name__ == "__main__":
-    # Configuramos el límite (ej. analizar los últimos 3 commits para proteger la cuota)
-    datos_crudos = extraer_commits_recientes(ruta=".", limite=3)
+    # Forzamos la lectura en la ruta absoluta del contenedor Docker de GitHub o "." en local
+    ruta_repo = os.getenv("GITHUB_WORKSPACE", ".")
+    datos_crudos = extraer_commits_recientes(ruta=ruta_repo, limite=3)
+    
     if datos_crudos:
         datos_evaluados = clasificar_contribucion_ia(datos_crudos)
         generar_dashboard_markdown(datos_evaluados)
     else:
-        print("No se detectaron commits recientes en este repositorio para procesar.")
+        print("Operación cancelada: No se pudo instanciar el repositorio o la historia está vacía.")
