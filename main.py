@@ -2,7 +2,6 @@ import os
 import subprocess
 from google import genai
 
-# Validación de seguridad de la API
 API_KEY = os.getenv("GEMINI_API_KEY")
 if not API_KEY:
     print("Error crítico: No se encontró la variable GEMINI_API_KEY.")
@@ -56,9 +55,8 @@ def extraer_commits_recientes(ruta=".", limite=3):
     return commits
 
 def clasificar_contribuciones_batch(commits):
-    print(f"[2/3] Enviando lote completo de {len(commits)} commits a Gemini en UNA SOLA petición...")
+    print(f"[2/3] Enviando lote completo de {len(commits)} commits a Gemini en una sola petición...")
     
-    # 1. Construimos un único texto con todos los commits juntos
     bloque_commits = ""
     for c in commits:
         bloque_commits += f"COMMIT: {c['hash']}\n"
@@ -71,42 +69,52 @@ def clasificar_contribuciones_batch(commits):
     
     {bloque_commits}
     
-    Para cada commit, clasifícalo en UNA de estas categorías exactas [Evolutivo, Mantenimiento, Riesgo Alto] y da una breve frase de justificación gerencial.
+    Para cada commit, clasifícalo en una de estas categorías exactas [Evolutivo, Mantenimiento, Riesgo Alto] y da una breve frase de justificación gerencial.
     
-    Devuelve OBLIGATORIAMENTE tu respuesta en este formato exacto, con una línea por commit:
+    Devuelve tu respuesta siguiendo ESTE FORMATO EXACTO por cada línea (una línea por commit, sin bloques de código markdown ni introducciones):
     hash_del_commit | categoria | frase de justificacion
     """
     
     resultados = []
-    analisis_ia = {}
+    texto_respuesta = ""
     
     try:
-        # 2. Hacemos UNA sola llamada a la API
         respuesta = client.models.generate_content(model=MODELO, contents=prompt)
-        lineas = respuesta.text.strip().split("\n") if respuesta.text else []
+        texto_respuesta = respuesta.text.strip() if respuesta.text else ""
         
-        # 3. Procesamos la respuesta múltiple
-        for linea in lineas:
-            if "|" in linea:
-                partes = linea.split("|")
-                h_commit = partes[0].strip()
-                cat = partes[1].strip() if len(partes) > 1 else "Sin Clasificar"
-                just = partes[2].strip() if len(partes) > 2 else "Procesado."
-                analisis_ia[h_commit] = {"categoria": cat, "justificacion": just}
-                
+        # IMPRIMIMOS LA RESPUESTA EN LA CONSOLA PARA VER QUÉ DICE REALMENTE GEMINI
+        print("\n=== 📝 RESPUESTA EN BRUTO DE GEMINI ===")
+        print(texto_respuesta)
+        print("=======================================\n")
+        
     except Exception as e:
-        print(f"❌ Error en la llamada por lotes a Gemini: {e}")
+        print(f"❌ Error crítico en la llamada de API de Gemini: {e}")
+        texto_respuesta = ""
 
-    # 4. Unimos los datos de Git con las respuestas de la IA
+    # Procesamiento elástico de líneas
     for c in commits:
-        info_ia = analisis_ia.get(c['hash'], {
-            "categoria": "Error IA", 
-            "justificacion": "No se pudo clasificar."
-        })
+        categoria = "Error IA"
+        justificacion = "No se pudo clasificar (Revisa el log de la consola)."
+        
+        if not texto_respuesta:
+            justificacion = "La API de Gemini no devolvió texto. Comprueba las cuotas o restricciones de la API Key."
+        else:
+            # Buscamos de forma elástica si el hash está contenido en alguna línea
+            for linea in texto_respuesta.split("\n"):
+                if c['hash'].lower() in linea.lower() and "|" in linea:
+                    partes = linea.split("|")
+                    if len(partes) >= 2:
+                        categoria = partes[1].strip()
+                    if len(partes) >= 3:
+                        justificacion = partes[2].strip()
+                    else:
+                        justificacion = "Análisis semántico completado."
+                    break # Encontrado, pasamos al siguiente commit
+                    
         resultados.append({
             "hash": c['hash'], "autor": c['autor'], "churn": c['churn_total'],
             "archivos_count": len(c['archivos_modificados']), 
-            "categoria": info_ia["categoria"], "justificacion": info_ia["justificacion"]
+            "categoria": categoria, "justificacion": justificacion
         })
     return resultados
 
