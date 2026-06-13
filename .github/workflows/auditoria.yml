@@ -1,6 +1,13 @@
 name: Evaluador Inteligente de TFM
 
-on: [push]
+on:
+  push:
+    branches: [ "main" ] # Se ejecuta automáticamente cuando subes cambios a main
+  workflow_dispatch:     # Activa el botón azul en GitHub para ejecutarlo manualmente cuando quieras
+  schedule:
+    # Se ejecutará automáticamente todos los días a las 07:00 UTC 
+    # (Equivale a las 09:00 AM en horario de verano en España)
+    - cron: '0 7 * * *'
 
 jobs:
   auditar-equipo:
@@ -24,8 +31,3 @@ jobs:
         with:
           name: informe-supervisor
           path: INFORME_SUPERVISOR.md
-
-
-
-
-          

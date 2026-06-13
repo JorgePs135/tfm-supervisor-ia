@@ -110,7 +110,7 @@ def clasificar_contribuciones_batch(commits):
                 for linea in texto_respuesta.split("\n"):
                     if c['hash'].lower() in linea.lower() and "|" in linea:
                         partes = linea.split("|")
-                        if len(partes) >= 2: categoria = partes[1].strip()
+                        if len(partes) >= 2: categoria = partes[1].replace("", "").strip()
                         if len(partes) >= 3: justificacion = partes[2].strip()
                         break
                         
